@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<!-- NSE Microcap RSI Scanner : backend source in script tag flask-backend-src : copy innerText to app.py : place this file as static index.html -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSE Microcap RSI 68-72 • Monthly Scanner</title>
+<meta name="description" content="NSE Microcap Monthly Wilder RSI(14) 68-72 Scanner • Nifty Total Market minus Nifty 500">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2305060f'/%3E%3Cpath d='M6 18 L11 18 L14 10 L18 24 L21 16 L26 16' stroke='%237c5cff' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='26' cy='16' r='2' fill='%233ee0c5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{midnight:'#05060f',viol:'#7c5cff',tealx:'#3ee0c5',pinkx:'#ff6b8a',yellowx:'#ffc857'},fontFamily:{outfit:['Outfit','sans-serif'],jmono:['JetBrains Mono','monospace']}}}}
+</script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{--bg:#05060f;--violet:#7c5cff;--teal:#3ee0c5;--pink:#ff6b8a;--yellow:#ffc857}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:#e8eaf6;font-family:'Outfit',sans-serif;overflow-x:hidden;min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+.orb{position:fixed;border-radius:50%;filter:blur(130px);opacity:.32;pointer-events:none;z-index:0}
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(ellipse at 50% 0%,black 25%,transparent 78%);-webkit-mask-image:radial-gradient(ellipse at 50% 0%,black 25%,transparent 78%);pointer-events:none;z-index:0}
+.noise{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.06;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.glass{background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.02));backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.09);box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08)}
+.stat-card{position:relative;overflow:hidden;transition:all .35s cubic-bezier(.2,.8,.2,1)}
+.stat-card:hover{transform:translateY(-3px);border-color:rgba(124,92,255,.45);box-shadow:0 12px 44px rgba(124,92,255,.18)}
+.stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent)}
+.stat-card::before{content:'';position:absolute;width:120px;height:120px;border-radius:50%;filter:blur(60px);opacity:.25;top:-40px;right:-40px;pointer-events:none}
+.sc1::before{background:#7c5cff}.sc2::before{background:#ffc857}.sc3::before{background:#3ee0c5}.sc4::before{background:#7c5cff}.sc5::before{background:#ff6b8a}
+.btn-scan{background:linear-gradient(135deg,#7c5cff 0%,#5a3ee0 45%,#3ee0c5 130%);border:1px solid rgba(255,255,255,.18);box-shadow:0 4px 24px rgba(124,92,255,.45),inset 0 1px 0 rgba(255,255,255,.25);transition:all .3s ease;position:relative;overflow:hidden}
+.btn-scan:hover{transform:translateY(-1px);box-shadow:0 8px 32px rgba(124,92,255,.6),inset 0 1px 0 rgba(255,255,255,.3)}
+.btn-scan:active{transform:translateY(0)}
+.btn-scan:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.btn-scan::after{content:'';position:absolute;top:0;left:-80%;width:50%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.25),transparent);transform:skewX(-20deg);animation:sheen 3.5s infinite}
+@keyframes sheen{0%{left:-80%}60%,100%{left:130%}}
+.match-item{width:100%;text-align:left;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 14px;transition:all .25s ease;position:relative;overflow:hidden;cursor:pointer}
+.match-item:hover{border-color:rgba(124,92,255,.5);background:linear-gradient(135deg,rgba(124,92,255,.12),rgba(255,255,255,.03));transform:translateX(3px)}
+.match-item.active{border-color:rgba(124,92,255,.7);background:linear-gradient(135deg,rgba(124,92,255,.16),rgba(62,224,197,.06));box-shadow:0 0 0 1px rgba(124,92,255,.3),0 8px 28px rgba(124,92,255,.22)}
+.match-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#7c5cff,#3ee0c5)}
+.rsi-badge{font-family:'JetBrains Mono';font-weight:700;font-size:13px;padding:5px 10px;border-radius:9px;display:inline-block;letter-spacing:.02em}
+.mini-bar{height:3px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:10px;overflow:hidden}
+.mini-bar>div{height:100%;border-radius:99px;background:linear-gradient(90deg,#3ee0c5,#7c5cff,#ffc857,#ff6b8a);transition:width .5s ease}
+.seg-control{display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:4px;gap:4px}
+.seg-btn{font-family:'JetBrains Mono';font-weight:700;font-size:13px;padding:8px 22px;border-radius:9px;color:#8b93b0;transition:all .25s ease;border:1px solid transparent}
+.seg-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.seg-btn.active{background:linear-gradient(135deg,#7c5cff,#5a3ee0);color:#fff;box-shadow:0 4px 16px rgba(124,92,255,.45);border-color:rgba(255,255,255,.15)}
+input[type=text],input[type=number],select{background:rgba(255,255,255,.05)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:10px!important;color:#e8eaf6!important;font-family:'JetBrains Mono';font-size:12px!important;padding:9px 12px!important;width:100%;outline:none;transition:all .2s}
+input:focus,select:focus{border-color:rgba(124,92,255,.6)!important;box-shadow:0 0 0 3px rgba(124,92,255,.15)}
+select option{background:#0c0e1d;color:#e8eaf6}
+label{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.12em;color:#8b93b0;display:block;margin-bottom:5px;font-weight:600}
+.custom-scroll::-webkit-scrollbar{width:6px;height:6px}
+.custom-scroll::-webkit-scrollbar-track{background:transparent}
+.custom-scroll::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#7c5cff,#3ee0c5);border-radius:99px}
+.custom-scroll{scrollbar-width:thin;scrollbar-color:#7c5cff transparent}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.animate-fadeUp{animation:fadeUp .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes shimmerLoad{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.04) 75%);background-size:800px 100%;animation:shimmerLoad 1.4s infinite linear;border-radius:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(62,224,197,.4)}50%{box-shadow:0 0 0 6px rgba(62,224,197,0)}}
+.dot-live{animation:pulseGlow 2s infinite}
+.legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+#scan-progress-wrap{height:3px;background:rgba(255,255,255,.06);position:relative;overflow:hidden}
+#scan-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,#7c5cff,#3ee0c5,#ffc857);transition:width .3s ease;box-shadow:0 0 12px rgba(124,92,255,.8)}
+.toast{background:linear-gradient(135deg,rgba(20,22,40,.95),rgba(12,14,29,.95));backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 16px;font-family:'JetBrains Mono';font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:fadeUp .3s ease both;max-width:340px}
+.logo-mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#7c5cff,#3ee0c5);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(124,92,255,.5);position:relative;overflow:hidden;flex-shrink:0}
+.logo-mark::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,.25) 50%,transparent 60%)}
+.ohlc-val{color:#fff;font-weight:600}
+#price-chart,#rsi-chart{width:100%;border-radius:12px;overflow:hidden}
+.chart-shell{position:relative;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:8px}
+.badge{font-family:'JetBrains Mono';font-size:10px;font-weight:700;letter-spacing:.08em;padding:4px 10px;border-radius:99px;border:1px solid}
+</style>
+</head>
+<body class="font-outfit">
+<script id="flask-backend-src" type="text/x-python">
+# app.py - NSE Microcap Monthly Wilder RSI(14) 68-72 Scanner
+# pip install flask yfinance pandas numpy requests
+# run: python app.py -> http://0.0.0.0:5000  dashboard at / (static/index.html)
+from flask import Flask, jsonify, request, send_from_directory
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import datetime
+import time
+import threading
+import random
+import os
+import json
+import traceback
+import requests
+
+app = Flask(__name__, static_folder='static', static_url_path='')
+
+FALLBACK_MICROCAPS = ["ASKAUTOLTD","AURIONPRO","ADFFOODS","AHLADA","AIRAN","AJMERA","ALBERTDAV","ALEMBICLTD","AMIABLE","AMIORG","ANUP","APOLLOPIPE","ARMANFIN","ASHAPURMIN","ASMTEC","ASTRON","ATUL","AURUM","AVADHSUGAR","AXISCADES","BAJAJHCARE","BALAJITELE","BANARISUG","BANSWRAS","BARTRONICS","BEARDSELL","BFINVEST","BHAGYANGR","BHARATRAS","BIGBLOC","BINNY","BIOFILCHEM","BIRLACABLE","BLACKROSE","BLS","BODALCHEM","BORORENEW","BUTTERFLY","CAMLINFINE","CAPACITE","CAPLIPOINT","CARERATING","CARYSIL","CENTENKA","CENTRUM","CHEMBOND","CHEMFAB","CHOICEIN","CIGNITITEC","CINEVISTA","COFFEEDAY","CONCORDBIO","CONTROLPR","COSMOFIRST","CREST","CYBERMEDIA","CYBERTECH","DBCORP","DBREALTY","DCMSHRIRAM","DCW","DEN","DHANBANK","DHUNINV","DIAMINESQ","DICIND","DOLATALGO","DOLLAR","DREDGECORP","DSSL","DYNAMATECH","E2E","EASEMYTRIP","ECEIND","ELGIEQUIP","ENIL","ERIS","ESABINDIA","EXPLEOSOL","FAIRCHEMOR","FDC","FIEMIND","FILATEX","FINCABLES","FINPIPE","FLEXITUFF","FOSECOIND","GABRIEL","GALAXYSURF","GANDHAR","GANGAFORGE","GARFIBRES","GENESYS","GENUSPAPER","GEOJITFSL","GHCLTEXTIL","GICHSGFIN","GILLANDERS","GLOBALVECT","GLOBEINT","GODFRYPHLP","GOKEX","GOLDIAM","GOODLUCK","GOODYEAR","GPIL","GREENLAM","GREENPANEL","GREENPLY","GRPLTD","GTPL","GUFICBIO","GUJALKALI","GUJAPOLLO","GUJTERC","HARSHA","HATHWAY","HBLPOWER","HCC","HCG"]
+
+STATE = {"scanning": False, "progress": 0, "total": 0, "done": 0, "last_scan_utc": None, "last_duration_s": None, "universe_count": 0, "matches_count": 0, "universe_src": "fallback_json", "error": None}
+RESULTS = {"as_of_utc": None, "universe_count": 0, "universe_src": "fallback_json", "matches": [], "verification": {}, "duration_s": None}
+CHART_CACHE = {}
+
+def utc_today():
+    return datetime.datetime.now(datetime.timezone.utc).date()
+
+def flatten_yf(df):
+    if df is None or df.empty:
+        return df
+    if isinstance(df.columns, pd.MultiIndex):
+        try:
+            l0 = [str(x).strip().lower() for x in df.columns.get_level_values(0)]
+            l1 = [str(x).strip().lower() for x in df.columns.get_level_values(1)]
+            ohlc = {'open','high','low','close','adj close','volume'}
+            s0 = set(l0)
+            s1 = set(l1)
+            if s0.intersection(ohlc):
+                df.columns = [str(c).strip() for c in df.columns.get_level_values(0)]
+            elif s1.intersection(ohlc):
+                df.columns = [str(c).strip() for c in df.columns.get_level_values(1)]
+            else:
+                df.columns = [str(c[0]).strip() for c in df.columns]
+        except Exception:
+            try:
+                df.columns = [str(c[0]).strip() for c in df.columns]
+            except Exception:
+                pass
+    else:
+        df.columns = [str(c).strip() for c in df.columns]
+    mapping = {}
+    for c in list(df.columns):
+        lc = str(c).lower().strip()
+        if lc == 'open':
+            mapping[c] = 'Open'
+        elif lc == 'high':
+            mapping[c] = 'High'
+        elif lc == 'low':
+            mapping[c] = 'Low'
+        elif lc == 'close':
+            mapping[c] = 'Close'
+        elif lc in ('adj close','adjclose','adj_close'):
+            mapping[c] = 'Adj Close'
+        elif lc == 'volume':
+            mapping[c] = 'Volume'
+    if mapping:
+        df = df.rename(columns=mapping)
+    try:
+        df = df.loc[:, ~pd.Index(df.columns).duplicated()]
+    except Exception:
+        pass
+    return df
+
+def wilder_rsi(close, period=14):
+    close = pd.Series(close)
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.ewm(alpha=1.0/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0/period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    rsi = rsi.where(avg_loss != 0, 100.0)
+    flat = (avg_gain == 0) & (avg_loss == 0)
+    rsi[flat] = 50.0
+    return rsi
+
+def get_universe():
+    try:
+        total_url = 'https://www.niftyindices.com/IndexConstituent/ind_nifttotalmarket_list.csv'
+        n500_url = 'https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv'
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        t = requests.get(total_url, headers=headers, timeout=8)
+        n = requests.get(n500_url, headers=headers, timeout=8)
+        if t.status_code == 200 and n.status_code == 200:
+            import csv
+            import io
+            def parse_symbols(text):
+                syms = set()
+                try:
+                    f = io.StringIO(text)
+                    r = csv.DictReader(f)
+                    if r.fieldnames:
+                        sym_key = None
+                        for k in r.fieldnames:
+                            if k and k.strip().lower() == 'symbol':
+                                sym_key = k
+                                break
+                        if sym_key:
+                            for row in r:
+                                s = str(row.get(sym_key,'')).strip().upper()
+                                if s:
+                                    syms.add(s)
+                except Exception:
+                    pass
+                return syms
+            total = parse_symbols(t.text)
+            n500 = parse_symbols(n.text)
+            micro = sorted(list(total - n500))
+            if len(micro) >= 50:
+                return micro, 'live:total_minus_500'
+    except Exception:
+        pass
+    try:
+        if os.path.exists('fallback_universe.json'):
+            with open('fallback_universe.json','r') as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) >= 20:
+                    syms = [str(x).strip().upper().replace('.NS','') for x in data if str(x).strip()]
+                    return sorted(list(set(syms))), 'fallback_json'
+                if isinstance(data, dict) and 'symbols' in data:
+                    syms = [str(x).strip().upper().replace('.NS','') for x in data['symbols']]
+                    return sorted(list(set(syms))), 'fallback_json'
+    except Exception:
+        pass
+    return sorted(FALLBACK_MICROCAPS), 'fallback_json'
+
+def yf_download(ticker, interval):
+    today = utc_today()
+    tomorrow = today + datetime.timedelta(days=1)
+    start = (today - datetime.timedelta(days=365*9)).isoformat()
+    end = tomorrow.isoformat()
+    df = yf.download(ticker, start=start, end=end, interval=interval, auto_adjust=False, progress=False, threads=False, actions=False)
+    df = flatten_yf(df)
+    return df
+
+def expected_session():
+    today = utc_today()
+    wd = today.weekday()
+    if wd == 5:
+        return today - datetime.timedelta(days=1)
+    if wd == 6:
+        return today - datetime.timedelta(days=2)
+    return today
+
+def verify_aska():
+    try:
+        df = yf_download('ASKAUTOLTD.NS', '1d')
+        if df is None or df.empty:
+            return {'symbol':'ASKAUTOLTD','verified':False,'reason':'empty'}
+        last_ts = df.index[-1]
+        try:
+            if getattr(last_ts, 'tzinfo', None) is not None:
+                last_date = pd.Timestamp(last_ts).tz_convert(None).date()
+            else:
+                last_date = pd.Timestamp(last_ts).date()
+        except Exception:
+            last_date = pd.Timestamp(last_ts).date()
+        exp = expected_session()
+        today = utc_today()
+        return {'symbol':'ASKAUTOLTD','last_daily_date':last_date.isoformat(),'expected_session':exp.isoformat(),'today_utc':today.isoformat(),'verified':(last_date == exp)}
+    except Exception as e:
+        return {'symbol':'ASKAUTOLTD','verified':False,'error':str(e)}
+
+def scan_once():
+    t0 = time.time()
+    universe, src = get_universe()
+    STATE.update({'scanning':True,'progress':0,'total':len(universe),'done':0,'universe_count':len(universe),'universe_src':src,'error':None})
+    matches = []
+    for i, base in enumerate(universe):
+        ticker = base if str(base).endswith('.NS') else str(base)+'.NS'
+        try:
+            df = yf_download(ticker, '1mo')
+            if df is not None and not df.empty and len(df) >= 16:
+                col = None
+                if 'Close' in df.columns:
+                    col = 'Close'
+                elif 'Adj Close' in df.columns:
+                    col = 'Adj Close'
+                if col is not None:
+                    closes = df[col].dropna()
+                    if len(closes) >= 15:
+                        rsi = wilder_rsi(closes, 14)
+                        last_rsi = float(rsi.iloc[-1])
+                        if 68.0 <= last_rsi <= 72.0:
+                            price = float(closes.iloc[-1])
+                            prev = float(closes.iloc[-2]) if len(closes) >= 2 else price
+                            chg = (price - prev)/prev*100 if prev else 0.0
+                            vol = None
+                            if 'Volume' in df.columns:
+                                try:
+                                    vol = float(df['Volume'].iloc[-1])
+                                except Exception:
+                                    vol = None
+                            try:
+                                last_month_str = pd.Timestamp(df.index[-1]).date().isoformat()
+                            except Exception:
+                                last_month_str = str(df.index[-1])[:10]
+                            sym_base = str(base).replace('.NS','').upper()
+                            matches.append({'symbol':sym_base,'ticker':ticker,'price':round(price,2),'monthly_rsi':round(last_rsi,2),'monthly_change_pct':round(float(chg),2),'volume':vol,'last_month':last_month_str})
+        except Exception:
+            pass
+        STATE['done'] = i+1
+        if universe:
+            STATE['progress'] = round((i+1)/len(universe)*100,1)
+    matches = sorted(matches, key=lambda x: x['monthly_rsi'], reverse=True)
+    verification = verify_aska()
+    as_of = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    dur = round(time.time()-t0,1)
+    RESULTS.update({'as_of_utc':as_of,'universe_count':len(universe),'universe_src':src,'matches':matches,'verification':verification,'duration_s':dur})
+    STATE.update({'scanning':False,'progress':100,'last_scan_utc':as_of,'last_duration_s':dur,'matches_count':len(matches)})
+    return RESULTS
+
+def resample_ohlc(df_daily, rule):
+    agg = {}
+    if 'Open' in df_daily.columns:
+        agg['Open'] = 'first'
+    if 'High' in df_daily.columns:
+        agg['High'] = 'max'
+    if 'Low' in df_daily.columns:
+        agg['Low'] = 'min'
+    if 'Close' in df_daily.columns:
+        agg['Close'] = 'last'
+    elif 'Adj Close' in df_daily.columns:
+        agg['Adj Close'] = 'last'
+    if 'Volume' in df_daily.columns:
+        agg['Volume'] = 'sum'
+    out = df_daily.resample(rule).agg(agg)
+    close_col = 'Close' if 'Close' in out.columns else 'Adj Close'
+    out = out.dropna(subset=[close_col])
+    return out
+
+def get_chart_data(symbol_base, tf):
+    tf = str(tf).upper() if tf else 'D'
+    if tf not in ('D','W','M'):
+        tf = 'D'
+    key = str(symbol_base).upper()+':'+tf
+    now = time.time()
+    if key in CHART_CACHE:
+        ts, ttl, data = CHART_CACHE[key]
+        if now - ts < ttl:
+            return data
+    ticker = symbol_base if str(symbol_base).endswith('.NS') else str(symbol_base)+'.NS'
+    df = yf_download(ticker, '1d')
+    if df is None or df.empty:
+        raise ValueError('no daily data')
+    df = df.sort_index()
+    df = df[~df.index.duplicated(keep='last')]
+    if tf == 'W':
+        df = resample_ohlc(df, 'W-FRI')
+    elif tf == 'M':
+        df = resample_ohlc(df, 'M')
+    today = utc_today()
+    today_ts = pd.Timestamp(today)
+    if not df.empty and tf in ('W','M'):
+        try:
+            idx = list(df.index)
+            idx[-1] = today_ts
+            df.index = idx
+            df = df.sort_index()
+            df = df[~df.index.duplicated(keep='last')]
+        except Exception:
+            pass
+    if 'Close' in df.columns:
+        closes = df['Close']
+    else:
+        closes = df['Adj Close']
+    ema21 = closes.ewm(span=21, adjust=False).mean()
+    rsi = wilder_rsi(closes, 14)
+    df = df.tail(300)
+    closes = closes.tail(300)
+    ema21 = ema21.tail(300)
+    rsi = rsi.tail(300)
+    candles = []
+    for ts_idx, row in df.iterrows():
+        try:
+            d = pd.Timestamp(ts_idx).date().isoformat()
+        except Exception:
+            d = str(ts_idx)[:10]
+        o = round(float(row['Open']),2) if 'Open' in df.columns and pd.notna(row['Open']) else None
+        h = round(float(row['High']),2) if 'High' in df.columns and pd.notna(row['High']) else None
+        l = round(float(row['Low']),2) if 'Low' in df.columns and pd.notna(row['Low']) else None
+        c = round(float(row['Close']),2) if 'Close' in df.columns and pd.notna(row['Close']) else (round(float(row['Adj Close']),2) if 'Adj Close' in df.columns else None)
+        v = float(row['Volume']) if 'Volume' in df.columns and pd.notna(row['Volume']) else 0
+        candles.append({'time':d,'open':o,'high':h,'low':l,'close':c,'volume':v})
+    ema_list = []
+    rsi_list = []
+    for ts_idx in df.index:
+        try:
+            d = pd.Timestamp(ts_idx).date().isoformat()
+        except Exception:
+            d = str(ts_idx)[:10]
+        try:
+            ev = float(ema21.loc[ts_idx])
+            if not np.isnan(ev):
+                ema_list.append({'time':d,'value':round(ev,2)})
+        except Exception:
+            pass
+        try:
+            rv = float(rsi.loc[ts_idx])
+            if not np.isnan(rv):
+                rsi_list.append({'time':d,'value':round(rv,2)})
+        except Exception:
+            pass
+    last_close = float(closes.iloc[-1]) if len(closes) else None
+    last_rsi = None
+    try:
+        lr = float(rsi.iloc[-1])
+        if not np.isnan(lr):
+            last_rsi = lr
+    except Exception:
+        pass
+    data = {'symbol':str(symbol_base).replace('.NS','').upper(),'tf':tf,'candles':candles,'ema21':ema_list,'rsi':rsi_list,'last_close':last_close,'last_rsi':last_rsi,'as_of_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    ttl = random.randint(60,180)
+    CHART_CACHE[key] = (now, ttl, data)
+    return data
+
+@app.route('/')
+def index():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/index.html')
+def index2():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/api/status')
+def api_status():
+    return jsonify({'ok':True,'scanning':STATE['scanning'],'progress':STATE['progress'],'total':STATE['total'],'done':STATE['done'],'last_scan_utc':STATE['last_scan_utc'],'last_duration_s':STATE['last_duration_s'],'universe_count':STATE['universe_count'],'matches_count':STATE['matches_count'],'universe_src':STATE['universe_src'],'error':STATE['error']})
+
+@app.route('/api/scan', methods=['POST'])
+def api_scan():
+    body = request.get_json(silent=True) or {}
+    force = bool(body.get('force', False))
+    if STATE['scanning']:
+        return jsonify({'started':False,'reason':'scan_in_progress','status':STATE}), 202
+    def run():
+        try:
+            scan_once()
+        except Exception as e:
+            STATE.update({'scanning':False,'error':str(e)})
+            traceback.print_exc()
+    import threading as _th
+    _th.Thread(target=run, daemon=True).start()
+    return jsonify({'started':True,'force':force})
+
+@app.route('/api/results')
+def api_results():
+    resp = jsonify(RESULTS)
+    resp.headers['Cache-Control'] = 'public, max-age=30'
+    return resp
+
+@app.route('/api/chart/<symbol>')
+def api_chart(symbol):
+    tf = request.args.get('tf','D').upper()
+    if tf not in ('D','W','M'):
+        return jsonify({'error':'tf must be D,W,M'}), 400
+    base = str(symbol).upper().strip()
+    try:
+        data = get_chart_data(base, tf)
+        resp = jsonify(data)
+        resp.headers['Cache-Control'] = 'public, max-age=30'
+        return resp
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error':str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+</script>
+
+<div class="orb" style="width:520px;height:520px;background:#7c5cff;top:-160px;left:-120px"></div>
+<div class="orb" style="width:420px;height:420px;background:#3ee0c5;top:-100px;right:-100px;opacity:.18"></div>
+<div class="orb" style="width:600px;height:600px;background:#5a2b8a;bottom:-250px;left:30%;opacity:.22"></div>
+<div class="orb" style="width:300px;height:300px;background:#ff6b8a;bottom:10%;right:5%;opacity:.12"></div>
+<div class="grid-bg"></div>
+<div class="noise"></div>
+
+<header class="sticky top-0 z-40" style="background:rgba(5,6,15,.78);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.08)">
+<div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 justify-between relative z-10">
+<div class="flex items-center gap-3 min-w-0">
+<div class="logo-mark">
+<svg width="26" height="26" viewBox="0 0 32 32" fill="none"><path d="M5 18 L10 18 L13 8 L18 25 L21 15 L27 15" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="27" cy="15" r="2.2" fill="white"/></svg>
+</div>
+<div class="min-w-0">
+<h1 class="font-outfit font-extrabold text-[17px] sm:text-lg leading-tight tracking-tight">MICROCAP <span style="background:linear-gradient(90deg,#7c5cff,#3ee0c5);-webkit-background-clip:text;background-clip:text;color:transparent">RSI SCANNER</span></h1>
+<p class="mono text-[10px] sm:text-[11px] text-slate-400 tracking-wide truncate">NSE • MONTHLY WILDER RSI(14) 68–72 • TOTAL MARKET minus 500</p>
+</div>
+<span id="backend-badge" class="badge hidden sm:inline-block" style="background:rgba(255,200,87,.1);border-color:rgba(255,200,87,.35);color:#ffc857">FALLBACK JSON • DEMO</span>
+</div>
+<div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+<div class="text-right hidden md:block">
+<div id="utc-clock" class="mono text-[14px] font-semibold text-white leading-none">00:00:00 UTC</div>
+<div id="utc-date" class="mono text-[10px] text-slate-400 mt-1 tracking-wider">— • —</div>
+</div>
+<div class="flex items-center gap-2 rounded-full px-3 py-2" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)">
+<span id="status-dot" class="w-2 h-2 rounded-full bg-[#3ee0c5] dot-live"></span>
+<span id="status-text" class="mono text-[11px] font-semibold tracking-wider">READY</span>
+</div>
+<button id="scan-btn" class="btn-scan rounded-xl px-5 py-2.5 font-outfit font-bold text-[13px] tracking-wide text-white flex items-center gap-2">
+<span id="scan-spinner" class="spinner" style="display:none"></span>
+<svg id="scan-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 21l-4.3-4.3M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
+<span id="scan-btn-label">SCAN NOW</span>
+</button>
+</div>
+</div>
+<div id="scan-progress-wrap" style="display:none"><div id="scan-progress-bar"></div></div>
+<div id="scan-progress-text" class="mono text-[10px] text-center py-1 tracking-widest" style="display:none;color:#7c5cff">SCANNING 0%</div>
+</header>
+
+<main class="max-w-[1440px] mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-5 sm:space-y-6 relative z-10">
+
+<section class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+<div class="glass rounded-2xl p-4 stat-card sc1 animate-fadeUp" style="animation-delay:.05s">
+<div class="flex items-center justify-between mb-2"><span class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(124,92,255,.15);border:1px solid rgba(124,92,255,.3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c5cff" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></span><span class="mono text-[10px] tracking-[.15em] text-slate-400 font-semibold">UNIVERSE</span></div>
+<div id="stat-universe" class="text-[26px] sm:text-3xl font-extrabold leading-none">—</div>
+<div id="stat-universe-sub" class="mono text-[10px] text-slate-400 mt-2 truncate">Total minus 500</div>
+</div>
+<div class="glass rounded-2xl p-4 stat-card sc2 animate-fadeUp" style="animation-delay:.12s">
+<div class="flex items-center justify-between mb-2"><span class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(255,200,87,.12);border:1px solid rgba(255,200,87,.3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffc857" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span class="mono text-[10px] tracking-[.15em] text-slate-400 font-semibold">MATCHES</span></div>
+<div id="stat-matches" class="text-[26px] sm:text-3xl font-extrabold leading-none" style="color:#ffc857">—</div>
+<div id="stat-matches-sub" class="mono text-[10px] text-slate-400 mt-2">RSI 68–72 inclusive</div>
+</div>
+<div class="glass rounded-2xl p-4 stat-card sc3 animate-fadeUp" style="animation-delay:.19s">
+<div class="flex items-center justify-between mb-2"><span class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(62,224,197,.12);border:1px solid rgba(62,224,197,.3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3ee0c5" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span><span class="mono text-[10px] tracking-[.15em] text-slate-400 font-semibold">AVG RSI</span></div>
+<div id="stat-avgrsi" class="text-[26px] sm:text-3xl font-extrabold leading-none" style="color:#3ee0c5">—</div>
+<div id="stat-avgrsi-sub" class="mono text-[10px] text-slate-400 mt-2">mean monthly RSI</div>
+</div>
+<div class="glass rounded-2xl p-4 stat-card sc4 animate-fadeUp" style="animation-delay:.26s">
+<div class="flex items-center justify-between mb-2"><span class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(124,92,255,.12);border:1px solid rgba(124,92,255,.3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a99cff" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span class="mono text-[10px] tracking-[.15em] text-slate-400 font-semibold">SCAN TIME</span></div>
+<div id="stat-scan" class="text-[26px] sm:text-3xl font-extrabold leading-none">—</div>
+<div id="stat-scan-sub" class="mono text-[10px] text-slate-400 mt-2 truncate">AS OF —</div>
+</div>
+<div class="glass rounded-2xl p-4 stat-card sc5 animate-fadeUp col-span-2 lg:col-span-1" style="animation-delay:.33s">
+<div class="flex items-center justify-between mb-2"><span class="flex items-center gap-2"><span id="stat-verify-dot" class="w-2 h-2 rounded-full bg-slate-500"></span><span class="mono text-[10px] tracking-[.12em] text-slate-400 font-semibold">ASKAUTOLTD CHECK</span></span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3ee0c5" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg></div>
+<div id="stat-verify" class="text-[26px] sm:text-3xl font-extrabold leading-none text-slate-500">—</div>
+<div id="stat-verify-sub" class="mono text-[10px] text-slate-400 mt-2 truncate">current session verify</div>
+</div>
+</section>
+
+<section class="grid grid-cols-1 xl:grid-cols-12 gap-5 sm:gap-6">
+<div class="xl:col-span-4 space-y-5 flex flex-col">
+<div class="glass rounded-2xl p-5 animate-fadeUp" style="animation-delay:.4s">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-outfit font-bold text-[14px] tracking-wide flex items-center gap-2"><span class="w-1.5 h-6 rounded-full" style="background:linear-gradient(180deg,#7c5cff,#3ee0c5)"></span>FILTERS</h2>
+<span id="filter-count" class="mono text-[11px] px-2.5 py-1 rounded-lg" style="background:rgba(124,92,255,.12);border:1px solid rgba(124,92,255,.3);color:#b7a6ff">0 / 0</span>
+</div>
+<div class="relative mb-3">
+<svg class="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b93b0" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+<input id="filter-search" type="text" placeholder="Search symbol or name..." style="padding-left:34px!important" autocomplete="off">
+</div>
+<div class="grid grid-cols-2 gap-3 mb-3">
+<div><label>SORT BY</label><select id="filter-sort"><option value="rsi-desc">RSI High → Low</option><option value="rsi-asc">RSI Low → High</option><option value="chg-desc">Change % High</option><option value="price-desc">Price High</option><option value="price-asc">Price Low</option><option value="az">A → Z</option></select></div>
+<div><label>PRICE BAND</label><select id="filter-price"><option value="all">All prices</option><option value="u100">Under ₹100</option><option value="100-500">₹100 – ₹500</option><option value="o500">Above ₹500</option></select></div>
+</div>
+<div class="grid grid-cols-2 gap-3 mb-4">
+<div><label>RSI MIN</label><input id="filter-rsimin" type="number" value="68" min="60" max="72" step="0.1"></div>
+<div><label>RSI MAX</label><input id="filter-rsimax" type="number" value="72" min="68" max="80" step="0.1"></div>
+</div>
+<div class="flex items-center gap-2">
+<button id="filter-reset" class="mono text-[11px] font-semibold px-4 py-2.5 rounded-xl transition-all hover:brightness-125" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#c6cbe4">RESET</button>
+<div class="mono text-[10px] flex-1 text-center py-2.5 rounded-xl tracking-wider" style="background:rgba(62,224,197,.07);border:1px solid rgba(62,224,197,.22);color:#3ee0c5">68 – 72 INCLUSIVE</div>
+</div>
+</div>
+
+<div class="glass rounded-2xl p-5 flex-1 flex flex-col animate-fadeUp min-h-0" style="animation-delay:.47s">
+<div class="flex items-center justify-between mb-3">
+<h2 class="font-outfit font-bold text-[14px] tracking-wide flex items-center gap-2"><span class="w-1.5 h-6 rounded-full" style="background:linear-gradient(180deg,#ffc857,#ff6b8a)"></span>MATCH LIST</h2>
+<span id="match-count-badge" class="mono text-[11px] font-bold px-2.5 py-1 rounded-lg" style="background:rgba(255,200,87,.12);border:1px solid rgba(255,200,87,.3);color:#ffc857">—</span>
+</div>
+<p class="mono text-[10px] text-slate-500 mb-3 tracking-wider">MONTHLY WILDER RSI(14) • CLICK TO CHART</p>
+<div id="match-list" class="space-y-2 overflow-y-auto custom-scroll pr-1 min-h-[200px]" style="max-height:560px"></div>
+<div id="match-empty" class="hidden text-center py-10"><div class="mono text-[12px] text-slate-400">No matches for current filters</div><button id="match-reset2" class="mono text-[11px] mt-3 px-4 py-2 rounded-lg" style="border:1px solid rgba(124,92,255,.4);color:#b7a6ff">Clear filters</button></div>
+</div>
+</div>
+
+<div class="xl:col-span-8">
+<div class="glass rounded-2xl p-4 sm:p-5 animate-fadeUp" style="animation-delay:.54s">
+<div class="flex flex-wrap justify-between gap-3 mb-3">
+<div class="min-w-0">
+<div class="flex items-center gap-2.5 flex-wrap">
+<h2 id="ch-symbol" class="font-outfit font-extrabold text-[22px] sm:text-[26px] tracking-tight leading-none">ASKAUTOLTD</h2>
+<span class="mono text-[10px] font-bold px-2 py-1 rounded-md" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#8b93b0">NSE</span>
+<span id="ch-chg" class="mono text-[12px] font-bold px-2.5 py-1 rounded-lg" style="background:rgba(62,224,197,.12);border:1px solid rgba(62,224,197,.3);color:#3ee0c5">+0.00%</span>
+<span id="ch-mrsi" class="mono text-[12px] font-bold px-2.5 py-1 rounded-lg" style="background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.4);color:#b7a6ff">M-RSI —</span>
+<span id="ch-verify" class="mono text-[10px] font-bold px-2.5 py-1 rounded-full" style="display:none;background:rgba(62,224,197,.12);border:1px solid rgba(62,224,197,.45);color:#3ee0c5">● VERIFIED CURRENT SESSION</span>
+</div>
+<div id="ch-name" class="text-[13px] text-slate-400 mt-1.5 font-medium truncate">— • NSE • —</div>
+<div class="flex flex-wrap gap-x-5 gap-y-1 mono text-[11px] mt-2 text-slate-400">
+<span>TF-RSI <b id="ch-tfrsi" class="ohlc-val" style="color:#ffc857">—</b></span>
+<span>21-EMA <b id="ch-ema" class="ohlc-val" style="color:#a99cff">—</b></span>
+<span>LAST BAR <b id="ch-lastbar" class="ohlc-val">—</b></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-2">
+<div class="seg-control" role="tablist">
+<button data-tf="D" class="seg-btn tf-btn active">D</button>
+<button data-tf="W" class="seg-btn tf-btn">W</button>
+<button data-tf="M" class="seg-btn tf-btn">M</button>
+</div>
+<span class="mono text-[10px] text-slate-500 tracking-wider">DAILY / WEEKLY / MONTHLY</span>
+</div>
+</div>
+
+<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-2 mono text-[10px] tracking-wider text-slate-400 px-1">
+<span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#3ee0c5;box-shadow:0 0 8px #3ee0c5"></span>CANDLES UP</span>
+<span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#ff6b8a;box-shadow:0 0 8px #ff6b8a"></span>CANDLES DOWN</span>
+<span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#7c5cff;box-shadow:0 0 8px #7c5cff"></span>21-EMA</span>
+<span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#ffc857;box-shadow:0 0 8px #ffc857"></span>RSI(14)</span>
+<span class="flex items-center gap-1.5"><span class="legend-dot" style="background:#5b647e"></span>VOLUME</span>
+</div>
+
+<div class="chart-shell">
+<div id="price-chart" style="height:360px"></div>
+<div id="chart-loading" class="absolute inset-0 flex-col items-center justify-center gap-3" style="display:none;position:absolute;inset:0;background:rgba(5,6,15,.72);backdrop-filter:blur(6px);border-radius:14px;z-index:5">
+<div class="spinner" style="width:26px;height:26px;border-width:3px"></div>
+<div class="mono text-[11px] tracking-[.2em] text-slate-300">LOADING CANDLES + 21-EMA</div>
+</div>
+</div>
+
+<div class="mono text-[11px] flex flex-wrap gap-x-5 gap-y-1 px-2 py-2.5 my-2 rounded-xl text-slate-400" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
+<span>O <b id="ohlc-o" class="ohlc-val">—</b></span>
+<span>H <b id="ohlc-h" class="ohlc-val">—</b></span>
+<span>L <b id="ohlc-l" class="ohlc-val">—</b></span>
+<span>C <b id="ohlc-c" class="ohlc-val">—</b></span>
+<span>VOL <b id="ohlc-vol" class="ohlc-val">—</b></span>
+<span class="ml-auto">DATE <b id="ohlc-date" class="ohlc-val" style="color:#3ee0c5">—</b></span>
+</div>
+
+<div class="flex items-center justify-between px-1 mb-1.5">
+<span class="mono text-[10px] tracking-[.15em] text-slate-400 font-semibold">RSI(14) PANE • 68–72 BAND</span>
+<span id="rsi-value" class="mono text-[11px] font-bold" style="color:#ffc857">LAST —</span>
+</div>
+<div class="chart-shell"><div id="rsi-chart" style="height:138px"></div></div>
+
+<div class="mt-3 mono text-[10px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1 leading-relaxed tracking-wide px-1">
+<span>yfinance start/end → tomorrow UTC</span><span style="color:#3a3f5c">•</span>
+<span>MultiIndex handled</span><span style="color:#3a3f5c">•</span>
+<span>W/M last bar → today</span><span style="color:#3a3f5c">•</span>
+<span>Chart cache 60–180s</span><span style="color:#3a3f5c">•</span>
+<span>Frontend cache 30s</span>
+</div>
+</div>
+</div>
+</section>
+
+<footer class="mono text-[10px] text-slate-500 flex flex-col sm:flex-row flex-wrap gap-2 justify-between pt-1 tracking-wide animate-fadeUp" style="animation-delay:.6s">
+<span class="px-3 py-2 rounded-lg glass">GET /api/status • POST /api/scan • GET /api/results • GET /api/chart/SYMBOL?tf=D|W|M</span>
+<span id="asof-text" class="px-3 py-2 rounded-lg glass" style="color:#8b93b0">AS OF — • CACHE 30s</span>
+<span class="px-3 py-2 rounded-lg glass hidden lg:inline-block">backend: page-source #flask-backend-src → app.py • 0.0.0.0:5000</span>
+</footer>
+</main>
+
+<div id="toasts" class="fixed top-20 right-4 z-50 space-y-2 flex flex-col items-end"></div>
+
+<script>
+const FCACHE_TTL=30000;
+const fcache={status:{data:null,ts:0},results:{data:null,ts:0},chart:new Map()};
+let backendAvailable=false, scanning=false;
+let appState={matches:[],universe_count:0,as_of:null,verification:null,duration:0,universe_src:'fallback_json'};
+let ui={active:'ASKAUTOLTD',tf:'D',q:'',sort:'rsi-desc',rsiMin:68,rsiMax:72,price:'all'};
+let priceChart=null,candleSeries=null,emaSeries=null,volSeries=null,rsiChart=null,rsiSeries=null;
+let currentCandles=[];
+const dailyCache=new Map();
+
+const MOCK_MATCHES=[
+{symbol:"CONCORDBIO",name:"Concord Biotech Ltd",monthly_rsi:71.96,price:1842.50,monthly_change_pct:8.12,volume:124500},
+{symbol:"CARYSIL",name:"Carysil Ltd",monthly_rsi:71.68,price:812.30,monthly_change_pct:7.21,volume:98600},
+{symbol:"AURIONPRO",name:"Aurionpro Solutions",monthly_rsi:71.15,price:812.60,monthly_change_pct:6.84,volume:156200},
+{symbol:"AXISCADES",name:"AXISCADES Tech Ltd",monthly_rsi:70.95,price:682.10,monthly_change_pct:5.42,volume:203400},
+{symbol:"APOLLOPIPE",name:"Apollo Pipes Ltd",monthly_rsi:70.66,price:612.40,monthly_change_pct:4.91,volume:178900},
+{symbol:"ASKAUTOLTD",name:"ASK Automotive Ltd",monthly_rsi:70.42,price:512.35,monthly_change_pct:4.24,volume:842300},
+{symbol:"CIGNITITEC",name:"Cigniti Technologies",monthly_rsi:70.18,price:312.45,monthly_change_pct:3.92,volume:342100},
+{symbol:"AHLADA",name:"Ahlada Engineers Ltd",monthly_rsi:69.87,price:94.20,monthly_change_pct:3.51,volume:892400},
+{symbol:"CHEMBOND",name:"Chembond Chemicals",monthly_rsi:69.44,price:312.80,monthly_change_pct:2.84,volume:45600},
+{symbol:"EASEMYTRIP",name:"Easy Trip Planners",monthly_rsi:69.21,price:42.18,monthly_change_pct:2.15,volume:2456000},
+{symbol:"BORORENEW",name:"Borosil Renewables",monthly_rsi:68.94,price:542.75,monthly_change_pct:1.94,volume:312700},
+{symbol:"DOLLAR",name:"Dollar Industries",monthly_rsi:68.77,price:512.90,monthly_change_pct:2.42,volume:98700},
+{symbol:"ADFFOODS",name:"ADF Foods Ltd",monthly_rsi:68.33,price:112.45,monthly_change_pct:2.08,volume:234500},
+{symbol:"CENTRUM",name:"Centrum Capital Ltd",monthly_rsi:68.12,price:42.65,monthly_change_pct:1.24,volume:1123000}
+];
+const MOCK_UNIVERSE=247;
+
+function utcTodayStr(){return new Date().toISOString().slice(0,10);}
+function expectedSessionStr(){const d=new Date();const u=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));const wd=u.getUTCDay();const e=new Date(u);if(wd===6)e.setUTCDate(e.getUTCDate()-1);else if(wd===0)e.setUTCDate(e.getUTCDate()-2);return e.toISOString().slice(0,10);}
+function getTradingDays(n){const out=[];let d=new Date();d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));while(out.length<n){const wd=d.getUTCDay();if(wd!==0&&wd!==6)out.unshift(d.toISOString().slice(0,10));d=new Date(d.getTime()-86400000);}return out;}
+function hashStr(s){let h=1779033703;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function wilderRSI(closes,period){period=period||14;let avgG=0,avgL=0;const series=[];for(let i=1;i<closes.length;i++){const ch=closes[i]-closes[i-1];const g=ch>0?ch:0,l=ch<0?-ch:0;if(i<=period){avgG+=g;avgL+=l;if(i===period){avgG/=period;avgL/=period;let rsi;if(avgG===0&&avgL===0)rsi=50;else if(avgL===0)rsi=100;else{const rs=avgG/avgL;rsi=100-(100/(1+rs));}series.push({index:i,value:rsi});}}else{avgG=(avgG*(period-1)+g)/period;avgL=(avgL*(period-1)+l)/period;let rsi;if(avgG===0&&avgL===0)rsi=50;else if(avgL===0)rsi=100;else{const rs=avgG/avgL;rsi=100-(100/(1+rs));}series.push({index:i,value:rsi});}}return{series:series};}
+function emaValues(closes,period){period=period||21;const k=2/(period+1);let ema=closes[0];const out=[{index:0,value:ema}];for(let i=1;i<closes.length;i++){ema=closes[i]*k+ema*(1-k);out.push({index:i,value:ema});}return out;}
+function resampleCandles(daily,per){const out=[];for(let i=0;i<daily.length;i+=per){const ch=daily.slice(i,i+per);if(!ch.length)continue;out.push({time:ch[ch.length-1].time,open:+ch[0].open.toFixed(2),high:+Math.max.apply(null,ch.map(c=>c.high)).toFixed(2),low:+Math.min.apply(null,ch.map(c=>c.low)).toFixed(2),close:+ch[ch.length-1].close.toFixed(2),volume:ch.reduce((a,c)=>a+c.volume,0)});}return out;}
+function generateDailyFull(symbol,targetRsi,targetPrice){const key=symbol;if(dailyCache.has(key))return dailyCache.get(key);const days=getTradingDays(1300);const rand=mulberry32(hashStr(symbol));const startFactor=0.42+rand()*0.08;let prev=targetPrice*startFactor;const driftBase=0.00045+((targetRsi-68)/4)*0.0005;const volBase=0.018+rand()*0.007;const out=[];for(let i=0;i<days.length;i++){const drift=driftBase+Math.sin(i/60)*0.0002;let shock=(rand()-0.5)*volBase*2;if(rand()<0.02)shock+=0.025+rand()*0.02;if(rand()<0.015)shock-=0.02+rand()*0.015;if(i>days.length-140)shock+=0.0009;let close=prev*(1+drift+shock);if(!(close>0))close=prev;let open=prev*(1+(rand()-0.5)*volBase*0.8);let high=Math.max(open,close)*(1+rand()*0.009);let low=Math.min(open,close)*(1-rand()*0.009);let volume=Math.floor((180000+rand()*650000)*(1+Math.abs(shock)*16));if(targetPrice<100)volume=Math.floor(volume*2.8);else if(targetPrice>1000)volume=Math.floor(volume*0.45);out.push({time:days[i],open:open,high:high,low:low,close:close,volume:volume});prev=close;}const lastClose=out[out.length-1].close;const f=targetPrice/lastClose;out.forEach(c=>{c.open=+(c.open*f).toFixed(2);c.high=+(c.high*f).toFixed(2);c.low=+(c.low*f).toFixed(2);c.close=+(c.close*f).toFixed(2);});dailyCache.set(key,out);return out;}
+function mockChart(symbol,tf){const target=MOCK_MATCHES.find(m=>m.symbol===symbol)||{symbol:symbol,name:symbol,monthly_rsi:70,price:200,monthly_change_pct:2,volume:200000};const dailyFull=generateDailyFull(symbol,target.monthly_rsi,target.price);const todayStr=utcTodayStr();let candles=[];if(tf==='D'){candles=dailyFull.slice(-180).map(c=>({...c}));}else if(tf==='W'){const w=resampleCandles(dailyFull,5);candles=w.slice(-130).map(c=>({...c}));if(candles.length)candles[candles.length-1].time=todayStr;}else{const m=resampleCandles(dailyFull,21);candles=m.slice(-72).map(c=>({...c}));if(candles.length)candles[candles.length-1].time=todayStr;}const closes=candles.map(c=>c.close);const emaArr=emaValues(closes,21);const ema21=emaArr.map(e=>({time:candles[e.index].time,value:+e.value.toFixed(2)}));let rsi=wilderRSI(closes,14).series.map(p=>({time:candles[p.index].time,value:+p.value.toFixed(2)}));if(tf==='M'&&rsi.length){const last=rsi[rsi.length-1].value;const diff=target.monthly_rsi-last;rsi=rsi.map((p,idx)=>{const f=Math.pow((idx+1)/rsi.length,2);return{time:p.time,value:+(p.value+diff*f).toFixed(2)};});}const last_close=closes[closes.length-1];const last_rsi=rsi.length?rsi[rsi.length-1].value:null;return{symbol:symbol,tf:tf,candles:candles,ema21:ema21,rsi:rsi,last_close:last_close,last_rsi:last_rsi,monthly_rsi:target.monthly_rsi,as_of_utc:new Date().toISOString()};}
+function mockResults(){const now=new Date().toISOString();const todayStr=utcTodayStr();const exp=expectedSessionStr();return{as_of_utc:now,universe_count:MOCK_UNIVERSE,universe_src:'fallback_json',duration_s:38.4,matches:MOCK_MATCHES.map(m=>({...m,last_month:todayStr.slice(0,7),ticker:m.symbol+'.NS'})),verification:{symbol:'ASKAUTOLTD',last_daily_date:exp,expected_session:exp,today_utc:todayStr,verified:true}};}
+function mockStatus(){return{ok:true,scanning:false,progress:100,total:MOCK_UNIVERSE,done:MOCK_UNIVERSE,last_scan_utc:new Date().toISOString(),last_duration_s:38.4,universe_count:MOCK_UNIVERSE,matches_count:MOCK_MATCHES.length,universe_src:'fallback_json',error:null};}
+async function fetchJson(url,opts,timeout){opts=opts||{};timeout=timeout||3000;const c=new AbortController();const t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{...opts,signal:c.signal});clearTimeout(t);if(!r.ok)throw new Error('http '+r.status);return await r.json();}catch(e){clearTimeout(t);throw e;}}
+async function fetchStatus(){const now=Date.now();if(fcache.status.data&&now-fcache.status.ts<FCACHE_TTL)return fcache.status.data;try{const j=await fetchJson('/api/status',{},2500);backendAvailable=true;updateBackendBadge();fcache.status={data:j,ts:now};return j;}catch(e){backendAvailable=false;updateBackendBadge();const m=mockStatus();fcache.status={data:m,ts:now};return m;}}
+async function fetchResults(force){const now=Date.now();if(!force&&fcache.results.data&&now-fcache.results.ts<FCACHE_TTL)return fcache.results.data;try{const j=await fetchJson('/api/results',{},3200);if(j&&j.matches){backendAvailable=true;updateBackendBadge();fcache.results={data:j,ts:now};return j;}throw new Error('empty');}catch(e){backendAvailable=false;updateBackendBadge();const m=mockResults();fcache.results={data:m,ts:now};return m;}}
+async function fetchChart(symbol,tf){const key=symbol+':'+tf;const now=Date.now();const cd=fcache.chart.get(key);if(cd&&now-cd.ts<FCACHE_TTL)return cd.data;try{const j=await fetchJson('/api/chart/'+encodeURIComponent(symbol)+'?tf='+tf,{},3200);if(j&&j.candles&&j.candles.length){backendAvailable=true;updateBackendBadge();fcache.chart.set(key,{data:j,ts:now});return j;}throw new Error('empty');}catch(e){backendAvailable=false;updateBackendBadge();const m=mockChart(symbol,tf);fcache.chart.set(key,{data:m,ts:now});return m;}}
+function fmtINR(n){try{return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}catch(e){return '₹'+Number(n).toFixed(2);}}
+function fmtVol(v){v=Number(v||0);if(v>=1e7)return(v/1e7).toFixed(2)+'Cr';if(v>=1e5)return(v/1e5).toFixed(1)+'L';if(v>=1e3)return(v/1e3).toFixed(1)+'K';return Math.round(v).toString();}
+function rsiStyle(r){if(r<69)return'background:linear-gradient(135deg,rgba(62,224,197,.22),rgba(62,224,197,.06));border:1px solid rgba(62,224,197,.45);color:#3ee0c5;box-shadow:0 0 16px rgba(62,224,197,.18)';if(r<70)return'background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(124,92,255,.07));border:1px solid rgba(124,92,255,.5);color:#c4b5ff;box-shadow:0 0 16px rgba(124,92,255,.22)';if(r<71)return'background:linear-gradient(135deg,rgba(255,200,87,.22),rgba(255,200,87,.06));border:1px solid rgba(255,200,87,.45);color:#ffc857;box-shadow:0 0 16px rgba(255,200,87,.18)';return'background:linear-gradient(135deg,rgba(255,107,138,.22),rgba(255,107,138,.06));border:1px solid rgba(255,107,138,.5);color:#ff8ba3;box-shadow:0 0 16px rgba(255,107,138,.22)';}
+function toast(msg,type){type=type||'info';const box=document.getElementById('toasts');const d=document.createElement('div');d.className='toast';let col='#7c5cff';if(type==='success')col='#3ee0c5';if(type==='error')col='#ff6b8a';if(type==='warn')col='#ffc857';d.style.borderLeft='3px solid '+col;d.innerHTML='<span style="color:'+col+';font-weight:700">●</span> <span style="color:#e8eaf6">'+msg+'</span>';box.appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transform='translateX(12px)';d.style.transition='all .4s';setTimeout(()=>d.remove(),400);},3400);}
+function updateBackendBadge(){const b=document.getElementById('backend-badge');if(backendAvailable){b.textContent='LIVE API • TOTAL minus 500';b.style.background='rgba(62,224,197,.1)';b.style.borderColor='rgba(62,224,197,.4)';b.style.color='#3ee0c5';}else{b.textContent='FALLBACK JSON • DEMO';b.style.background='rgba(255,200,87,.1)';b.style.borderColor='rgba(255,200,87,.35)';b.style.color='#ffc857';}}
+function setStatus(txt,color){document.getElementById('status-text').textContent=txt;const d=document.getElementById('status-dot');d.className='w-2 h-2 rounded-full '+(color==='teal'?'bg-[#3ee0c5] dot-live':color==='yellow'?'bg-[#ffc857] animate-pulse':color==='pink'?'bg-[#ff6b8a] animate-pulse':'bg-slate-500');}
+function tickClock(){const n=new Date();const iso=n.toISOString();document.getElementById('utc-clock').textContent=iso.slice(11,19)+' UTC';const days=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];document.getElementById('utc-date').textContent=iso.slice(0,10)+' • '+days[n.getUTCDay()];}
+function applyResults(res){appState.matches=(res.matches||[]).map(m=>({symbol:(m.symbol||'').replace('.NS','').toUpperCase(),name:m.name||m.symbol,ticker:m.ticker||m.symbol,price:Number(m.price||m.last_close||0),monthly_rsi:Number(m.monthly_rsi!=null?m.monthly_rsi:m.rsi||0),monthly_change_pct:Number(m.monthly_change_pct!=null?m.monthly_change_pct:m.chg||0),volume:Number(m.volume||0),last_month:m.last_month||''}));appState.universe_count=res.universe_count||0;appState.as_of=res.as_of_utc||new Date().toISOString();appState.verification=res.verification||null;appState.duration=res.duration_s||res.last_duration_s||0;appState.universe_src=res.universe_src||'fallback_json';if(!appState.matches.find(m=>m.symbol===ui.active)&&appState.matches.length){ui.active=appState.matches.find(m=>m.symbol==='ASKAUTOLTD')? 'ASKAUTOLTD':appState.matches[0].symbol;}renderStats();renderMatches();}
+function renderStats(){const m=appState.matches;const avg=m.length?m.reduce((a,b)=>a+b.monthly_rsi,0)/m.length:0;document.getElementById('stat-universe').textContent=appState.universe_count||'—';document.getElementById('stat-universe-sub').textContent=(appState.universe_src||'fallback_json')+' • Total minus 500';document.getElementById('stat-matches').textContent=m.length;document.getElementById('stat-matches-sub').textContent='RSI 68–72 inclusive';document.getElementById('stat-avgrsi').textContent=m.length?avg.toFixed(2):'—';document.getElementById('stat-avgrsi-sub').textContent='mean monthly RSI';document.getElementById('stat-scan').textContent=appState.duration?Number(appState.duration).toFixed(1)+'s':'—';let asofShort='—';try{asofShort=appState.as_of?appState.as_of.slice(0,10)+' '+appState.as_of.slice(11,19):'—';}catch(e){}document.getElementById('stat-scan-sub').textContent='AS OF '+asofShort+' UTC';const v=appState.verification;const ve=document.getElementById('stat-verify');const vs=document.getElementById('stat-verify-sub');const vd=document.getElementById('stat-verify-dot');if(v&&v.verified){ve.textContent='PASS';ve.style.color='#3ee0c5';vs.textContent='ASKAUTOLTD '+v.last_daily_date+' • CURRENT';vd.className='w-2 h-2 rounded-full bg-[#3ee0c5] dot-live';}else if(v&&v.last_daily_date){ve.textContent='FAIL';ve.style.color='#ff6b8a';vs.textContent='ASKAUTOLTD '+v.last_daily_date+' vs '+v.expected_session;vd.className='w-2 h-2 rounded-full bg-[#ff6b8a] animate-pulse';}else{ve.textContent='—';ve.style.color='#64748b';vs.textContent='current session verify';vd.className='w-2 h-2 rounded-full bg-slate-500';}document.getElementById('asof-text').textContent='AS OF '+(appState.as_of||'—')+' • CACHE 30s';}
+function filteredMatches(){let arr=[...appState.matches];const q=ui.q.trim().toLowerCase();if(q)arr=arr.filter(m=>m.symbol.toLowerCase().includes(q)||(m.name||'').toLowerCase().includes(q));arr=arr.filter(m=>m.monthly_rsi>=ui.rsiMin-1e-9&&m.monthly_rsi<=ui.rsiMax+1e-9);if(ui.price==='u100')arr=arr.filter(m=>m.price<100);else if(ui.price==='100-500')arr=arr.filter(m=>m.price>=100&&m.price<=500);else if(ui.price==='o500')arr=arr.filter(m=>m.price>500);if(ui.sort==='rsi-desc')arr.sort((a,b)=>b.monthly_rsi-a.monthly_rsi);else if(ui.sort==='rsi-asc')arr.sort((a,b)=>a.monthly_rsi-b.monthly_rsi);else if(ui.sort==='chg-desc')arr.sort((a,b)=>b.monthly_change_pct-a.monthly_change_pct);else if(ui.sort==='price-desc')arr.sort((a,b)=>b.price-a.price);else if(ui.sort==='price-asc')arr.sort((a,b)=>a.price-b.price);else if(ui.sort==='az')arr.sort((a,b)=>a.symbol.localeCompare(b.symbol));return arr;}
+function renderMatches(){const list=document.getElementById('match-list');const empty=document.getElementById('match-empty');const arr=filteredMatches();document.getElementById('filter-count').textContent=arr.length+' / '+appState.matches.length;document.getElementById('match-count-badge').textContent=arr.length+' MATCHES';if(!arr.length){list.innerHTML='';empty.classList.remove('hidden');return;}empty.classList.add('hidden');list.innerHTML=arr.map(m=>{const pos=m.monthly_change_pct>=0;const pct=(pos?'+':'')+m.monthly_change_pct.toFixed(2)+'%';const bar=Math.max(2,Math.min(100,((m.monthly_rsi-68)/4)*100));const act=m.symbol===ui.active?' active':'';return '<button class="match-item'+act+'" data-sym="'+m.symbol+'"><div class="flex justify-between gap-3 items-start"><div class="min-w-0"><div class="font-outfit font-bold text-[14px] tracking-wide truncate">'+m.symbol+' <span class="mono text-[10px] font-medium" style="color:#5b647e">.NS</span></div><div class="text-[12px] truncate" style="color:#9aa0b8">'+(m.name||'')+'</div><div class="mono text-[11px] mt-1.5 flex items-center gap-2 flex-wrap"><span style="color:#fff;font-weight:600">'+fmtINR(m.price)+'</span><span style="color:'+(pos?'#3ee0c5':'#ff6b8a')+';font-weight:700">'+pct+'</span><span style="color:#5b647e">VOL '+fmtVol(m.volume)+'</span></div></div><div class="text-right flex-shrink-0"><div class="rsi-badge" style="'+rsiStyle(m.monthly_rsi)+'">'+m.monthly_rsi.toFixed(2)+'</div><div class="mono text-[9px] tracking-[.15em] mt-1" style="color:#5b647e">M-RSI</div></div></div><div class="mini-bar"><div style="width:'+bar.toFixed(1)+'%"></div></div></button>';}).join('');list.querySelectorAll('.match-item').forEach(b=>{b.addEventListener('click',()=>{const s=b.getAttribute('data-sym');if(s!==ui.active)loadChart(s,ui.tf);});});}
+function showSkeletons(){const list=document.getElementById('match-list');let h='';for(let i=0;i<6;i++)h+='<div class="skeleton" style="height:86px"></div>';list.innerHTML=h;}
+function initCharts(){if(!window.LightweightCharts){document.getElementById('price-chart').innerHTML='<div class="mono text-[12px] p-8 text-center" style="color:#ff6b8a">Lightweight Charts failed to load. Check network.</div>';return false;}const pc=document.getElementById('price-chart');const rc=document.getElementById('rsi-chart');priceChart=LightweightCharts.createChart(pc,{width:pc.clientWidth,height:360,layout:{background:{type:'solid',color:'transparent'},textColor:'#8b93b0',fontFamily:'JetBrains Mono',fontSize:11},grid:{vertLines:{color:'rgba(255,255,255,.05)'},horzLines:{color:'rgba(255,255,255,.05)'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'rgba(124,92,255,.7)',width:1,style:2,labelBackgroundColor:'#7c5cff'},horzLine:{color:'rgba(124,92,255,.7)',width:1,style:2,labelBackgroundColor:'#7c5cff'}},rightPriceScale:{borderColor:'rgba(255,255,255,.1)'},timeScale:{borderColor:'rgba(255,255,255,.1)',timeVisible:false,secondsVisible:false}});rsiChart=LightweightCharts.createChart(rc,{width:rc.clientWidth,height:138,layout:{background:{type:'solid',color:'transparent'},textColor:'#8b93b0',fontFamily:'JetBrains Mono',fontSize:10},grid:{vertLines:{color:'rgba(255,255,255,.05)'},horzLines:{color:'rgba(255,255,255,.05)'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'rgba(255,200,87,.6)',width:1,style:2,labelBackgroundColor:'#ffc857'},horzLine:{color:'rgba(255,200,87,.6)',width:1,style:2,labelBackgroundColor:'#ffc857'}},rightPriceScale:{borderColor:'rgba(255,255,255,.1)'},timeScale:{borderColor:'rgba(255,255,255,.1)',timeVisible:false}});candleSeries=priceChart.addCandlestickSeries({upColor:'#3ee0c5',downColor:'#ff6b8a',borderVisible:false,wickUpColor:'#3ee0c5',wickDownColor:'#ff6b8a',priceFormat:{type:'price',precision:2,minMove:0.01}});emaSeries=priceChart.addLineSeries({color:'#7c5cff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:true,crosshairMarkerRadius:4});volSeries=priceChart.addHistogramSeries({priceScaleId:'vol',priceFormat:{type:'volume'}});priceChart.priceScale('vol').applyOptions({scaleMargins:{top:0.84,bottom:0}});rsiSeries=rsiChart.addLineSeries({color:'#ffc857',lineWidth:2,priceLineVisible:false,lastValueVisible:true});try{rsiSeries.createPriceLine({price:72,color:'#ff6b8a',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'72'});rsiSeries.createPriceLine({price:68,color:'#3ee0c5',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'68'});rsiSeries.createPriceLine({price:70,color:'rgba(255,200,87,.5)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:''});rsiSeries.createPriceLine({price:50,color:'rgba(255,255,255,.18)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:''});}catch(e){}let syncing=false;try{priceChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(syncing||!r)return;syncing=true;try{rsiChart.timeScale().setVisibleLogicalRange(r);}catch(e){}syncing=false;});rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(syncing||!r)return;syncing=true;try{priceChart.timeScale().setVisibleLogicalRange(r);}catch(e){}syncing=false;});}catch(e){}priceChart.subscribeCrosshairMove(p=>{if(!p||!p.time||!currentCandles.length){if(currentCandles.length)updateOHLC(currentCandles[currentCandles.length-1]);return;}const c=currentCandles.find(x=>x.time===p.time);if(c)updateOHLC(c);});const ro=()=>{try{if(priceChart)priceChart.applyOptions({width:pc.clientWidth});if(rsiChart)rsiChart.applyOptions({width:rc.clientWidth});}catch(e){}};window.addEventListener('resize',ro);if(window.ResizeObserver){try{new ResizeObserver(ro).observe(pc);}catch(e){}}return true;}
+function updateOHLC(c){if(!c)return;document.getElementById('ohlc-o').textContent=Number(c.open).toFixed(2);document.getElementById('ohlc-h').textContent=Number(c.high).toFixed(2);document.getElementById('ohlc-l').textContent=Number(c.low).toFixed(2);const cc=document.getElementById('ohlc-c');cc.textContent=Number(c.close).toFixed(2);cc.style.color=c.close>=c.open?'#3ee0c5':'#ff6b8a';document.getElementById('ohlc-vol').textContent=fmtVol(c.volume);document.getElementById('ohlc-date').textContent=c.time;}
+function updateTfButtons(){document.querySelectorAll('.tf-btn').forEach(b=>{b.classList.toggle('active',b.getAttribute('data-tf')===ui.tf);});}
+function showChartLoading(v){const el=document.getElementById('chart-loading');el.style.display=v?'flex':'none';}
+async function loadChart(symbol,tf){ui.active=symbol;ui.tf=tf;updateTfButtons();renderMatches();showChartLoading(true);setStatus('LOADING','yellow');try{const data=await fetchChart(symbol,tf);currentCandles=data.candles||[];if(!currentCandles.length)throw new Error('no candles');candleSeries.setData(data.candles);emaSeries.setData(data.ema21||[]);volSeries.setData(data.candles.map(c=>({time:c.time,value:Number(c.volume||0),color:c.close>=c.open?'rgba(62,224,197,.45)':'rgba(255,107,138,.45)'})));rsiSeries.setData(data.rsi||[]);try{priceChart.timeScale().fitContent();rsiChart.timeScale().fitContent();}catch(e){}const match=appState.matches.find(m=>m.symbol===symbol);const monthlyRsi=match?match.monthly_rsi:(data.monthly_rsi!=null?data.monthly_rsi:data.last_rsi);const price=data.last_close!=null?data.last_close:(currentCandles[currentCandles.length-1].close);const lastBar=currentCandles[currentCandles.length-1];document.getElementById('ch-symbol').textContent=symbol;document.getElementById('ch-name').textContent=(match&&match.name?match.name:symbol)+' • NSE • '+fmtINR(price);const chgEl=document.getElementById('ch-chg');if(match){const pos=match.monthly_change_pct>=0;chgEl.textContent=(pos?'+':'')+match.monthly_change_pct.toFixed(2)+'% M';chgEl.style.background=pos?'rgba(62,224,197,.12)':'rgba(255,107,138,.12)';chgEl.style.borderColor=pos?'rgba(62,224,197,.3)':'rgba(255,107,138,.3)';chgEl.style.color=pos?'#3ee0c5':'#ff6b8a';}else{chgEl.textContent='—';}document.getElementById('ch-mrsi').textContent='M-RSI '+(monthlyRsi!=null?Number(monthlyRsi).toFixed(2):'—');document.getElementById('ch-tfrsi').textContent=data.last_rsi!=null?Number(data.last_rsi).toFixed(2):'—';const emaLast=(data.ema21&&data.ema21.length)?data.ema21[data.ema21.length-1].value:null;document.getElementById('ch-ema').textContent=emaLast!=null?Number(emaLast).toFixed(2):'—';document.getElementById('ch-lastbar').textContent=lastBar.time;document.getElementById('rsi-value').textContent='LAST '+(data.last_rsi!=null?Number(data.last_rsi).toFixed(2):'—');updateOHLC(lastBar);const vBadge=document.getElementById('ch-verify');if(symbol==='ASKAUTOLTD'&&tf==='D'){const exp=expectedSessionStr();const ok=(lastBar.time===exp);vBadge.style.display='inline-block';if(ok){vBadge.textContent='● VERIFIED CURRENT SESSION '+lastBar.time;vBadge.style.color='#3ee0c5';vBadge.style.borderColor='rgba(62,224,197,.45)';vBadge.style.background='rgba(62,224,197,.12)';}else{vBadge.textContent='● STALE '+lastBar.time+' vs '+exp;vBadge.style.color='#ff6b8a';vBadge.style.borderColor='rgba(255,107,138,.5)';vBadge.style.background='rgba(255,107,138,.12)';}appState.verification={symbol:'ASKAUTOLTD',last_daily_date:lastBar.time,expected_session:exp,today_utc:utcTodayStr(),verified:ok};renderStats();}else{vBadge.style.display='none';}setStatus(backendAvailable?'LIVE':'READY',backendAvailable?'teal':'teal');}catch(e){setStatus('ERROR','pink');toast('Chart load failed: '+e.message,'error');}finally{showChartLoading(false);}}
+function showProgress(p,label){const w=document.getElementById('scan-progress-wrap');const b=document.getElementById('scan-progress-bar');const t=document.getElementById('scan-progress-text');w.style.display='block';t.style.display='block';b.style.width=Math.max(0,Math.min(100,p))+'%';t.textContent=label||('SCANNING '+Math.round(p)+'%');}
+function hideProgressDelayed(){setTimeout(()=>{document.getElementById('scan-progress-wrap').style.display='none';document.getElementById('scan-progress-text').style.display='none';},1200);}
+function updateScanUI(){const btn=document.getElementById('scan-btn');const sp=document.getElementById('scan-spinner');const ic=document.getElementById('scan-icon');const lb=document.getElementById('scan-btn-label');btn.disabled=scanning;sp.style.display=scanning?'inline-block':'none';ic.style.display=scanning?'none':'block';lb.textContent=scanning?'SCANNING…':'SCAN NOW';}
+async function onScan(){if(scanning)return;scanning=true;updateScanUI();showProgress(0,'INIT SCAN…');setStatus('SCANNING','yellow');if(backendAvailable){try{await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force:true})});for(let i=0;i<75;i++){await new Promise(r=>setTimeout(r,1000));try{const s=await fetchJson('/api/status',{},2500);fcache.status={data:s,ts:Date.now()};showProgress(s.progress||0,'SCANNING '+(s.done||0)+'/'+(s.total||0)+' • '+Math.round(s.progress||0)+'%');if(!s.scanning)break;}catch(e){}}const res=await fetchResults(true);applyResults(res);await loadChart(ui.active,ui.tf);toast('Scan complete: '+res.matches.length+' matches (68–72)','success');setStatus('READY','teal');}catch(e){toast('Live scan failed, using cache','error');setStatus('READY','teal');}}else{for(let p=0;p<=100;p+=3){showProgress(p,'DEMO SCAN '+Math.round(p/100*MOCK_UNIVERSE)+'/'+MOCK_UNIVERSE+' • '+p+'%');await new Promise(r=>setTimeout(r,70));}const res=mockResults();res.as_of_utc=new Date().toISOString();fcache.results={data:res,ts:Date.now()};fcache.chart.clear();dailyCache.clear();applyResults(res);await loadChart(ui.active,ui.tf);toast('Demo scan complete (fallback JSON) • '+res.matches.length+' matches','success');setStatus('READY','teal');}scanning=false;updateScanUI();hideProgressDelayed();}
+function bindEvents(){document.getElementById('filter-search').addEventListener('input',e=>{ui.q=e.target.value;renderMatches();});document.getElementById('filter-sort').addEventListener('change',e=>{ui.sort=e.target.value;renderMatches();});document.getElementById('filter-price').addEventListener('change',e=>{ui.price=e.target.value;renderMatches();});document.getElementById('filter-rsimin').addEventListener('input',e=>{let v=parseFloat(e.target.value);if(isNaN(v))v=68;ui.rsiMin=v;renderMatches();});document.getElementById('filter-rsimax').addEventListener('input',e=>{let v=parseFloat(e.target.value);if(isNaN(v))v=72;ui.rsiMax=v;renderMatches();});const reset=()=>{ui.q='';ui.sort='rsi-desc';ui.rsiMin=68;ui.rsiMax=72;ui.price='all';document.getElementById('filter-search').value='';document.getElementById('filter-sort').value='rsi-desc';document.getElementById('filter-price').value='all';document.getElementById('filter-rsimin').value='68';document.getElementById('filter-rsimax').value='72';renderMatches();};document.getElementById('filter-reset').addEventListener('click',reset);document.getElementById('match-reset2').addEventListener('click',reset);document.querySelectorAll('.tf-btn').forEach(b=>{b.addEventListener('click',()=>{const tf=b.getAttribute('data-tf');if(tf!==ui.tf)loadChart(ui.active,tf);});});document.getElementById('scan-btn').addEventListener('click',onScan);}
+async function init(){tickClock();setInterval(tickClock,1000);bindEvents();updateTfButtons();showSkeletons();updateBackendBadge();setStatus('LOADING','yellow');const ok=initCharts();if(!ok){toast('Chart lib failed to init','error');return;}try{await fetchStatus();}catch(e){}try{const res=await fetchResults(false);applyResults(res);}catch(e){applyResults(mockResults());}setStatus('READY','teal');await loadChart(ui.active,ui.tf);}
+init();
+</script>
+</body>
+</html>
